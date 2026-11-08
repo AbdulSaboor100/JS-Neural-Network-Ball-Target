@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure JS Image Generator Neural Network</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+
+        .container {
+            background: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            border-radius: 4px;
+            margin: 1.5rem 0;
+            width: 180px;
+            height: 180px;
+            image-rendering: pixelated; /* Keeps pixels sharp when scaled up */
+        }
+
+        button {
+            background-color: #0066cc;
+            color: #ffffff;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0052a3;
+        }
+
+        .pixel-output {
+            font-family: monospace;
+            background: #eee;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            word-break: break-all;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Pure JS Neural Network Generator</h2>
+    <p>Generates a 3x3 pixel image from a random latent noise vector using a feedforward network from scratch.</p>
+    
+    <canvas id="pixelCanvas" width="3" height="3"></canvas>
+    
+    <br>
+    <button id="generateBtn">Generate New Image</button>
+
+    <div class="pixel-output" id="rawOutput">Click generate to run forward pass</div>
+</div>
+
+<script>
+    // --- 1. Matrix & Math Helpers ---
+    function matrixMultiply(inputs, weights, biases) {
+        let outputs = [];
+        for (let i = 0; i < inputs.length; i++) {
+            let row = [];
+            for (let j = 0; j < weights[0].length; j++) {
+                let sum = biases[j];
+                for (let k = 0; k < inputs[i].length; k++) {
+                    sum += inputs[i][k] * weights[k][j];
+                }
+                row.push(sum);
+            }
+            outputs.push(row);
+        }
+        return outputs;
+    }
+
+    function relu(matrix) {
+        return matrix.map(row => row.map(val => Math.max(0, val)));
+    }
+
+    function tanh(matrix) {
+        return matrix.map(row => row.map(val => Math.tanh(val)));
+    }
+
+    function randomMatrix(rows, cols) {
+        let mat = [];
+        for (let i = 0; i < rows; i++) {
+            let row = [];
+            for (let j = 0; j < cols; j++) {
+                row.push((Math.random() * 2 - 1) * 0.5);
+            }
+            mat.push(row);
+        }
+        return mat;
+    }
+
+    function randomVector(size) {
+        let vec = [];
+        for (let i = 0; i < size; i++) vec.push(0);
+        return vec;
+    }
+
+    // --- 2. Neural Network Configuration ---
+    const latentDim = 4;   // Input noise vector size
+    const hiddenDim = 16;  // Hidden layer size
+    const outputDim = 9;   // Output pixel count (3x3 grid)
+
+    // Initialize fixed random weights and biases for the network instance
+    const model = {
+        w1: randomMatrix(latentDim, hiddenDim),
+        b1: randomVector(hiddenDim),
+        w2: randomMatrix(hiddenDim, outputDim),
+        b2: randomVector(outputDim)
+    };
+
+    // --- 3. Forward Pass Logic ---
+    function generateImage() {
+        // Step A: Sample latent noise vector [1, latentDim]
+        let noise = [[]];
+        for (let i = 0; i < latentDim; i++) {
+            noise[0].push(Math.random() * 2 - 1);
+        }
+
+        // Step B: Hidden Layer + ReLU Activation
+        let hiddenOut = matrixMultiply(noise, model.w1, model.b1);
+        let activatedHidden = relu(hiddenOut);
+
+        // Step C: Output Layer + Tanh Activation (outputs [-1, 1])
+        let rawOutput = matrixMultiply(activatedHidden, model.w2, model.b2);
+        let pixelOutput = tanh(rawOutput);
+
+        return pixelOutput[0];
+    }
+
+    // --- 4. DOM Rendering & Canvas Logic ---
+    const canvas = document.getElementById('pixelCanvas');
+    const ctx = canvas.getContext('2d');
+    const generateBtn = document.getElementById('generateBtn');
+    const rawOutputDiv = document.getElementById('rawOutput');
+
+    function renderGeneratedPixels() {
+        const pixels = generateImage();
+        const imgData = ctx.createImageData(3, 3);
+
+        pixels.forEach((val, index) => {
+            // Map pixel range [-1, 1] to RGB range [0, 255]
+            let normalizedVal = Math.floor(((val + 1) / 2) * 255);
+            
+            let i = index * 4;
+            imgData.data[i]     = normalizedVal; // Red
+            imgData.data[i + 1] = normalizedVal; // Green
+            imgData.data[i + 2] = normalizedVal; // Blue
+            imgData.data[i + 3] = 255;           // Alpha
+        });
+
+        // Draw pixel data onto 3x3 canvas context
+        ctx.putImageData(imgData, 0, 0);
+
+        // Display formatted array output
+        rawOutputDiv.innerText = "Output [-1, 1]:\n" + JSON.stringify(pixels.map(p => Number(p.toFixed(2))));
+    }
+
+    // Attach Event Listeners
+    generateBtn.addEventListener('click', renderGeneratedPixels);
+
+    // Initial run on load
+    renderGeneratedPixels();
+</script>
+
+</body>
+</html>

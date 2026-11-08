@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Training Ground Skeleton</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: monospace;
+        }
+        canvas {
+            border: 2px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+
+<script>
+let ball;
+let target;
+let groundY = 400;
+
+function setup() {
+    createCanvas(800, 500);
+    
+    // Initialize the ball object on the ground
+    ball = {
+        x: 100,
+        y: groundY - 15,
+        vx: 0,
+        vy: 0,
+        radius: 15
+    };
+    
+    // Spawn the first random target mark
+    spawnTarget();
+}
+
+function draw() {
+    background(20, 20, 30);
+    
+    // 1. Draw Environment (Ground & Target)
+    drawEnvironment();
+    
+    // 2. GET DECISION FROM YOUR NEURAL NETWORK
+    // This function returns parameters (like force, velocity, or acceleration)
+    // based on what your neural network calculates!
+    let nnOutput = getNeuralNetworkOutput(ball, target);
+    
+    // 3. Move the ball using your parameters
+    // updateBall(nnOutput);
+    
+    // 4. Check if ball reached target
+    checkTargetCollision();
+    
+    // 5. Draw the ball
+    drawBall();
+}
+
+// ==========================================
+// 🧠 PLUG YOUR NEURAL NETWORK CODE HERE
+// ==========================================
+function getNeuralNetworkOutput(ball, target) {
+    // TODO: Pass inputs (e.g., distance to target, current speed) 
+    // through your neural network's forwardPropagation() function here!
+    
+    // For this skeleton, we'll return dummy parameters (e.g., simple steering logic 
+    // or manual test controls so the ball moves toward the target).
+    // Replace this return object with your neural network's predicted actions!
+    
+    let targetForceX = (target.x - ball.x) * 0.05; 
+    let targetForceY = (target.y - ball.y) * 0.05;
+
+    return {
+        forceX: targetForceX,
+        forceY: targetForceY
+    };
+}
+
+function updateBall(params) {
+    // Apply parameters received from your neural network/decision function
+    ball.vx += params.forceX;
+    ball.vy += params.forceY;
+    
+    // Apply friction/drag so it doesn't fly infinitely
+    ball.vx *= 0.90;
+    ball.vy *= 0.90;
+    
+    // Update position
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    
+    // Keep ball above ground
+    if (ball.y > groundY - ball.radius) {
+        ball.y = groundY - ball.radius;
+        ball.vy = 0;
+    }
+}
+
+function spawnTarget() {
+    target = {
+        x: random(200, width - 50),
+        y: groundY - random(20, 150), // Can spawn on ground or floating slightly above
+        radius: 12
+    };
+}
+
+function checkTargetCollision() {
+    let d = dist(ball.x, ball.y, target.x, target.y);
+    if (d < ball.radius + target.radius) {
+        // Target reached! Respawn target and give reward (if training)
+        spawnTarget();
+        console.log("Target reached! Spawning new target...");
+    }
+}
+
+function drawEnvironment() {
+    // Draw Ground Line
+    stroke(100, 200, 255);
+    strokeWeight(4);
+    line(0, groundY, width, groundY);
+    
+    // Draw Target Mark
+    noStroke();
+    fill(0, 255, 120);
+    ellipse(target.x, target.y, target.radius * 2);
+    
+    // Target pulse effect ring
+    noFill();
+    stroke(0, 255, 120, 150);
+    ellipse(target.x, target.y, target.radius * 3.5);
+}
+
+function drawBall() {
+    noStroke();
+    fill(255, 80, 120);
+    ellipse(ball.x, ball.y, ball.radius * 2);
+}
+</script>
+
+</body>
+</html>

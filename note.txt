@@ -1,0 +1,18 @@
+What is neuron calculation in code? 
+(input * weight) + bias
+(5 * 4) + 5 = 25
+
+What is ReLU activation function ?
+Math.max(0, x) in js
+
+Both neuron + ReLU together ?
+(input * weight) + bias
+ReLU(-4)=0 ( IN SIMPLE: Math.max(0, x) in js)
+
+How to find Gradient?
+Formula:
+2 * (prediction - actual) * x   -for Weight
+2 * (prediction - actual)   -for bias
+
+New Weight Calculate Formula
+oldWeight = newWeight - (learningRate * weightGradient)

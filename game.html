@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Ball Target Acquisition & Physics Sandbox</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- p5.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-6">
+
+    <!-- Header Section -->
+    <header
+        class="max-w-7xl w-full mx-auto mb-4 flex flex-col md:flex-row justify-between items-center bg-slate-800/80 p-4 rounded-xl border border-slate-700 backdrop-blur-md">
+        <div class="flex items-center space-x-3 mb-3 md:mb-0">
+            <div class="p-2.5 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-bullseye text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1
+                    class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                    AI Target Acquisition Lab
+                </h1>
+                <p class="text-xs text-slate-400">Autonomous Physics Steering & Neural Sandbox</p>
+            </div>
+        </div>
+
+        <!-- Metric Badges -->
+        <div class="flex flex-wrap gap-2 text-xs">
+            <div class="bg-slate-900/90 px-3 py-2 rounded-lg border border-slate-700/80 flex items-center space-x-2">
+                <span class="text-slate-400">Epoch/Gen:</span>
+                <span id="epochBadge" class="font-mono font-bold text-indigo-400 text-sm">0</span>
+            </div>
+            <div class="bg-slate-900/90 px-3 py-2 rounded-lg border border-slate-700/80 flex items-center space-x-2">
+                <span class="text-slate-400">Distance Error:</span>
+                <span id="errorBadge" class="font-mono font-bold text-amber-400 text-sm">0 px</span>
+            </div>
+            <div class="bg-slate-900/90 px-3 py-2 rounded-lg border border-slate-700/80 flex items-center space-x-2">
+                <span class="text-slate-400">Success Rate:</span>
+                <span id="successBadge" class="font-mono font-bold text-emerald-400 text-sm">0%</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+
+        <!-- Left Column: p5.js Simulation Canvas -->
+        <div class="lg:col-span-8 flex flex-col gap-4">
+            <div id="canvasContainer"
+                class="relative w-full bg-slate-900 rounded-xl border border-slate-800 p-2 flex justify-center items-center overflow-hidden min-h-[420px]">
+                <!-- Canvas injected here by p5 -->
+                <div id="canvasOverlay"
+                    class="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm p-3 rounded-lg border border-slate-700 text-xs text-slate-300 space-y-1 pointer-events-none">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span>
+                        <span>Ball (Agent)</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+                        <span>Target Mark</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-0.5 bg-indigo-400 inline-block border border-dashed"></span>
+                        <span>Predicted Trajectory</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Trajectory / Loss Chart Panel -->
+            <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 flex flex-col justify-between">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-indigo-400"></i> Neural Loss Curve (MSE)
+                    </h3>
+                    <span id="lossValueText" class="text-xs font-mono text-indigo-300">Loss: --</span>
+                </div>
+                <div
+                    class="w-full h-24 bg-slate-900/90 rounded-lg border border-slate-800 relative overflow-hidden flex items-end p-1">
+                    <svg id="lossSvg" class="w-full h-full overflow-visible">
+                        <polyline id="lossPolyline" fill="none" stroke="#6366f1" stroke-width="2" points="" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Control Center & NN Inspector -->
+        <div class="lg:col-span-4 flex flex-col gap-4 custom-scrollbar overflow-y-auto max-h-[720px] pr-1">
+
+            <!-- Mode Switcher -->
+            <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4">
+                <h2 class="text-sm font-bold text-slate-200 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-cyan-400"></i> Mode Selection
+                </h2>
+                <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                    <button id="manualModeBtn" onclick="setMode('manual')"
+                        class="py-2 text-xs font-medium rounded-md transition-all duration-200 bg-indigo-600 text-white shadow-md">
+                        <i class="fa-solid fa-hand-pointer mr-1"></i> Manual Control
+                    </button>
+                    <button id="aiModeBtn" onclick="setMode('ai')"
+                        class="py-2 text-xs font-medium rounded-md transition-all duration-200 text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-brain mr-1"></i> AI Neural Mode
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Parameters Panel -->
+            <div id="manualControls" class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 space-y-4">
+                <h3 class="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-gamepad"></i> Direct Ball Impulse Command
+                </h3>
+                <p class="text-xs text-slate-400">
+                    Pass custom physical parameters directly to the <code>moveBallToTarget(angle, force)</code>
+                    function:
+                </p>
+
+                <!-- Angle Slider -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Launch Angle (&theta;)</span>
+                        <span id="angleValue" class="font-mono text-cyan-400">45°</span>
+                    </div>
+                    <input id="angleInput" type="range" min="0" max="180" value="45"
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                </div>
+
+                <!-- Force/Velocity Slider -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Impulse Force (N)</span>
+                        <span id="forceValue" class="font-mono text-cyan-400">12.0</span>
+                    </div>
+                    <input id="forceInput" type="range" min="1" max="30" step="0.5" value="12"
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                </div>
+
+                <!-- Ground Friction Slider -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Ground Friction (&mu;)</span>
+                        <span id="frictionValue" class="font-mono text-cyan-400">0.05</span>
+                    </div>
+                    <input id="frictionInput" type="range" min="0.01" max="0.2" step="0.01" value="0.05"
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                </div>
+
+                <button onclick="triggerManualLaunch()"
+                    class="w-full py-2.5 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-semibold rounded-lg text-xs shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i> Execute Launch Command
+                </button>
+            </div>
+
+            <!-- AI Neural Network Settings Panel -->
+            <div id="aiControls" class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 space-y-4 hidden">
+                <h3 class="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-microchip"></i> Neural Learning Engine
+                </h3>
+
+                <!-- Learning Rate Slider -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Learning Rate (&alpha;)</span>
+                        <span id="lrValue" class="font-mono text-emerald-400">0.05</span>
+                    </div>
+                    <input id="lrInput" type="range" min="0.005" max="0.2" step="0.005" value="0.05"
+                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                </div>
+
+                <!-- Action Controls -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="trainToggleBtn" onclick="toggleTraining()"
+                        class="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-play"></i> Start Auto Train
+                    </button>
+                    <button onclick="stepAITrain()"
+                        class="py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg text-xs transition-all flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-forward-step"></i> Step Epoch
+                    </button>
+                </div>
+
+                <button onclick="resetNeuralWeights()"
+                    class="w-full py-2 border border-rose-500/50 hover:bg-rose-500/10 text-rose-400 font-medium rounded-lg text-xs transition-all flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i> Reset Brain Weights
+                </button>
+            </div>
+
+            <!-- Neural Network Structural Visualizer -->
+            <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 flex flex-col gap-2">
+                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-indigo-400"></i> Network Architecture
+                </h3>
+                <div class="text-[11px] text-slate-400">
+                    Input: <span class="text-slate-200 font-mono">[Target Distance, Ground Friction]</span> &rarr;
+                    Hidden Layer &rarr; Output: <span class="text-slate-200 font-mono">[Angle, Force]</span>
+                </div>
+
+                <!-- Diagram canvas for neural weights -->
+                <div
+                    class="w-full h-32 bg-slate-900 rounded-lg border border-slate-800 relative flex items-center justify-center overflow-hidden p-2">
+                    <svg id="nnSvg" class="w-full h-full">
+                        <!-- Dynamic NN topology renders here -->
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Telemetry Logs -->
+            <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 flex flex-col gap-2">
+                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-terminal text-cyan-400"></i> Event Telemetry
+                </h3>
+                <div id="telemetryLog"
+                    class="h-28 bg-slate-900 rounded-lg border border-slate-800 p-2 font-mono text-[10px] text-slate-300 overflow-y-auto space-y-1 custom-scrollbar">
+                    <div class="text-slate-500">> Physics Sandbox initialized successfully.</div>
+                    <div class="text-slate-500">> Ready for custom Neural Network implementation.</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-7xl w-full mx-auto mt-6 text-center text-xs text-slate-500 py-2 border-t border-slate-800">
+        p5.js Physics & Deep Learning Architecture | Autonomous Ball Targeting Simulation
+    </footer>
+
+    <script>
+        // ====================================================================
+        // GLOBAL STATE & SIMULATION VARIABLES
+        // ====================================================================
+        let canvasWidth = 720;
+        let canvasHeight = 400;
+
+        // Physics Constants & Simulation Entities
+        let groundY;
+        let ball;
+        let target;
+        let friction = 0.05;
+        let gravity = 0.4;
+        let isMoving = false;
+        let currentMode = 'manual'; // 'manual' or 'ai'
+
+        // AI Metrics
+        let isTraining = false;
+        let epoch = 0;
+        let successCount = 0;
+        let totalAttempts = 0;
+        let lossHistory = [];
+        let previousTrajectories = [];
+        let currentPath = [];
+
+        // UI Element References
+        const angleInput = document.getElementById('angleInput');
+        const forceInput = document.getElementById('forceInput');
+        const frictionInput = document.getElementById('frictionInput');
+        const lrInput = document.getElementById('lrInput');
+
+        const angleVal = document.getElementById('angleValue');
+        const forceVal = document.getElementById('forceValue');
+        const frictionVal = document.getElementById('frictionValue');
+        const lrVal = document.getElementById('lrValue');
+
+        // ====================================================================
+        // P5.JS SKETCH IMPLEMENTATION
+        // ====================================================================
+        function setup() {
+            let container = document.getElementById('canvasContainer');
+            canvasWidth = container.clientWidth - 16;
+            canvasHeight = 400;
+
+            let canvas = createCanvas(canvasWidth, canvasHeight);
+            canvas.parent('canvasContainer');
+
+            groundY = canvasHeight - 50;
+
+            // Initialize Physical Entities
+            ball = {
+                x: 80,
+                y: groundY - 15,
+                radius: 15,
+                vx: 0,
+                vy: 0,
+                startX: 80,
+                startY: groundY - 15
+            };
+
+            target = {
+                x: random(250, canvasWidth - 60),
+                y: groundY - 10,
+                radius: 18
+            };
+
+            // Bind Control UI Listeners
+            angleInput.addEventListener('input', (e) => angleVal.innerText = `${e.target.value}°`);
+            forceInput.addEventListener('input', (e) => forceVal.innerText = Number(e.target.value).toFixed(1));
+            frictionInput.addEventListener('input', (e) => {
+                friction = parseFloat(e.target.value);
+                frictionVal.innerText = friction.toFixed(2);
+            });
+            lrInput.addEventListener('input', (e) => {
+                lrVal.innerText = parseFloat(e.target.value).toFixed(3);
+            });
+
+            drawNNTopology();
+            // Populate initial dataset
+            generateDatasetSamples();
+        }
+
+        function draw() {
+            background(15, 23, 42); // Slate-900 canvas backdrop
+
+            // 1. Draw Ground Line & Terrain Grid
+            stroke(51, 65, 85);
+            strokeWeight(2);
+            for (let i = 0; i < width; i += 20) {
+                line(i, groundY + 1, i + 10, height);
+            }
+            stroke(99, 102, 241);
+            strokeWeight(3);
+            line(0, groundY, width, groundY);
+
+            // 2. Draw Target Marker
+            noStroke();
+            let pulse = sin(frameCount * 0.1) * 4;
+            fill(244, 63, 94, 60);
+            ellipse(target.x, target.y, (target.radius * 2) + pulse);
+            fill(244, 63, 94);
+            ellipse(target.x, target.y, target.radius * 1.2);
+            fill(255);
+            ellipse(target.x, target.y, 6);
+
+            // 3. Draw Historical Trajectories
+            noFill();
+            strokeWeight(1.5);
+            for (let path of previousTrajectories) {
+                stroke(99, 102, 241, 40);
+                beginShape();
+                for (let pt of path) {
+                    vertex(pt.x, pt.y);
+                }
+                endShape();
+            }
+
+            // 4. Draw Current Ball Path
+            if (currentPath.length > 1) {
+                stroke(34, 211, 238);
+                strokeWeight(2.5);
+                beginShape();
+                for (let pt of currentPath) {
+                    vertex(pt.x, pt.y);
+                }
+                endShape();
+            }
+
+            // 5. Physics Movement Updates
+            if (isMoving) {
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                currentPath.push({ x: ball.x, y: ball.y });
+
+                // Ground Collision
+                if (ball.y >= groundY - ball.radius) {
+                    ball.y = groundY - ball.radius;
+                    ball.vy = -ball.vy * 0.3; // Elastic bouncy impact
+                    ball.vx *= (1 - friction); // Friction
+
+                    if (abs(ball.vx) < 0.08 && abs(ball.vy) < 0.08) {
+                        ball.vx = 0;
+                        ball.vy = 0;
+                        isMoving = false;
+                        onLaunchComplete();
+                    }
+                } else {
+                    ball.vy += gravity;
+                    ball.vx *= 0.995;
+                }
+
+                // Boundary check
+                if (ball.x > width || ball.x < 0) {
+                    isMoving = false;
+                    onLaunchComplete();
+                }
+            }
+
+            // 6. Draw Ball (Agent)
+            noStroke();
+            fill(34, 211, 238);
+            ellipse(ball.x, ball.y, ball.radius * 2);
+            fill(255);
+            ellipse(ball.x - 3, ball.y - 3, 5);
+
+            // 7. Draw Aim Line if manual & stationary
+            if (!isMoving && currentMode === 'manual') {
+                let angle = radians(parseFloat(angleInput.value));
+                let force = parseFloat(forceInput.value);
+                let aimX = ball.x + cos(-angle) * force * 5;
+                let aimY = ball.y + sin(-angle) * force * 5;
+
+                stroke(251, 191, 36, 180);
+                strokeWeight(2);
+                line(ball.x, ball.y, aimX, aimY);
+            }
+        }
+
+        // ====================================================================
+        // BALL MOTION & CORE LAUNCH FUNCTION
+        // ====================================================================
+        /**
+        * Core function to steer the ball towards the target
+        * @param {number} angleDeg - Launch angle in degrees (0 - 180)
+        * @param {number} force - Applied impulse velocity scalar
+        */
+        function moveBallToTarget(angleDeg, force) {
+            if (isMoving) return;
+
+            // Reset ball position
+            ball.x = ball.startX;
+            ball.y = ball.startY;
+
+            // Calculate directional velocities
+            let rad = radians(angleDeg);
+            ball.vx = cos(-rad) * force;
+            ball.vy = sin(-rad) * force;
+
+            currentPath = [{ x: ball.x, y: ball.y }];
+            isMoving = true;
+
+            logTelemetry(`Ball launched: Angle = ${angleDeg.toFixed(1)}°, Force = ${force.toFixed(1)}`);
+        }
+
+        function triggerManualLaunch() {
+            if (currentMode !== 'manual') setMode('manual');
+            let angle = parseFloat(angleInput.value);
+            let force = parseFloat(forceInput.value);
+            moveBallToTarget(angle, force);
+        }
+
+        // ====================================================================
+        // AI EVALUATION & TARGET RESET LOGIC
+        // ====================================================================
+        function onLaunchComplete() {
+            previousTrajectories.push([...currentPath]);
+            if (previousTrajectories.length > 8) previousTrajectories.shift();
+
+            let distToTarget = dist(ball.x, ball.y, target.x, target.y);
+            document.getElementById('errorBadge').innerText = `${Math.round(distToTarget)} px`;
+
+            totalAttempts++;
+
+            if (distToTarget <= target.radius + ball.radius + 5) {
+                successCount++;
+                logTelemetry(`<span class="text-emerald-400">TARGET HIT! Re-spawning target marker...</span>`);
+                respawnTarget();
+            } else {
+                logTelemetry(`Missed target by ${Math.round(distToTarget)}px.`);
+            }
+
+            let rate = Math.round((successCount / totalAttempts) * 100);
+            document.getElementById('successBadge').innerText = `${rate}%`;
+
+            if (currentMode === 'ai' && isTraining) {
+                setTimeout(stepAITrain, 400);
+            }
+        }
+
+        function respawnTarget() {
+            target.x = random(200, width - 60);
+            target.y = groundY - 10;
+        }
+
+        // ====================================================================
+        // UI & MODE SWITCHING UTILITIES
+        // ====================================================================
+        function setMode(mode) {
+            currentMode = mode;
+            let manualBtn = document.getElementById('manualModeBtn');
+            let aiBtn = document.getElementById('aiModeBtn');
+            let manualControls = document.getElementById('manualControls');
+            let aiControls = document.getElementById('aiControls');
+
+            if (mode === 'manual') {
+                manualBtn.className = "py-2 text-xs font-medium rounded-md transition-all duration-200 bg-indigo-600 text-white shadow-md";
+                aiBtn.className = "py-2 text-xs font-medium rounded-md transition-all duration-200 text-slate-400 hover:text-white";
+                manualControls.classList.remove('hidden');
+                aiControls.classList.add('hidden');
+                isTraining = false;
+            } else {
+                aiBtn.className = "py-2 text-xs font-medium rounded-md transition-all duration-200 bg-indigo-600 text-white shadow-md";
+                manualBtn.className = "py-2 text-xs font-medium rounded-md transition-all duration-200 text-slate-400 hover:text-white";
+                aiControls.classList.remove('hidden');
+                manualControls.classList.add('hidden');
+            }
+            logTelemetry(`Switched to ${mode.toUpperCase()} mode.`);
+        }
+
+        function logTelemetry(msg) {
+            let log = document.getElementById('telemetryLog');
+            let entry = document.createElement('div');
+            entry.innerHTML = `> ${msg}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateLossChart() {
+            let polyline = document.getElementById('lossPolyline');
+            if (lossHistory.length < 2) return;
+
+            let points = "";
+            let maxLoss = Math.max(...lossHistory, 0.1);
+            let svgWidth = 280;
+            let svgHeight = 80;
+
+            for (let i = 0; i < lossHistory.length; i++) {
+                let x = (i / (lossHistory.length - 1)) * svgWidth;
+                let y = svgHeight - (lossHistory[i] / maxLoss) * svgHeight;
+                points += `${x},${y} `;
+            }
+            polyline.setAttribute('points', points);
+        }
+
+        function drawNNTopology() {
+            let svg = document.getElementById('nnSvg');
+            svg.innerHTML = `
+ <text x="50%" y="50%" fill="#64748b" font-size="10" text-anchor="middle">
+ [ Plug your custom NN instance here to visualize weights ]
+ </text>
+ `;
+        }
+
+        // ====================================================================
+        // YOUR CUSTOM NEURAL NETWORK HOOKS (FILL THESE OUT!)
+        // ====================================================================
+        function createNetwork(layers) {
+            // Adding Values (Weights, Bias, Dataset) to the Network
+            const network = {
+                weights: [],
+                biases: [],
+                dataset: [
+                    { input: [], actual: [] },
+                    { input: [], actual: [] },
+                    { input: [], actual: [] }
+                ],
+                layers
+            }
+            for (let l = 1; l < layers.length; l++) {
+                network.weights.push(Array(layers[l]).fill().map(() => Array(layers[l - 1]).fill().map(() => Math.random() * 2 - 1)))
+                network.biases.push(Array(layers[l]).fill().map(() => Math.random() * 2 - 1))
+            }
+            return network;
+        }
+        function reLU(x) {
+            return Math.max(0, x);
+        }
+        function sigmoid(x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+        const network = createNetwork([2, 2, 2, 2]);
+        // Helper: Generate training samples dynamically using physics heuristics (The "Teacher")
+        function generateDatasetSamples(numSamples = 3) {
+            network.dataset = [];
+            for (let i = 0; i < numSamples; i++) {
+                // Simulate various random target distances across the canvas
+                let simulatedTargetX = random(200, canvasWidth - 60);
+                let distanceX = simulatedTargetX - ball.startX;
+
+                // Normalize inputs between [0, 1]
+                let normDist = constrain(distanceX / canvasWidth, 0, 1);
+                let normFriction = friction / 0.2;
+
+                // Calculate ideal physics targets (Ground truth teacher logic)
+                let idealForce = constrain(sqrt(distanceX * gravity * 1.8), 2, 28);
+                let idealAngle = 45; // Optimal launch angle
+
+                // Map targets to [0, 1] for Sigmoid output compatibility
+                let targetAngleNorm = (idealAngle - 5) / 80;
+                let targetForceNorm = (idealForce - 2) / 26;
+                network.dataset.push({
+                    input: [normDist, normFriction],
+                    actual: [targetAngleNorm, targetForceNorm]
+                });
+            }
+        }
+
+
+
+        function stepAITrain() {
+            if (isMoving) return;
+            console.log(network);
+            const { weights, biases, dataset: ds, layers } = network;
+            const dataset = [
+                // {
+                //     input: [0.2220629501677839, 0.5],
+                //     actual: [0.5, 0.4094068025394076]
+                // },
+                {
+                    input: [0.35, 0.7],
+                    actual: [0.5, 0.4094068025394076]
+                }
+            ]
+
+            function predict(weights, biases, dataset) {
+                // console.log(weights, biases, dataset)
+                let predictions = []
+                for (let i = 0; i < weights.length; i++) {
+                    let values = [...dataset.input]
+                    for (let j = 0; j < weights[i].length; j++) {
+                        let sum = 0
+                        // console.log(weights[i][j], "Hidden Layer: ", i, "Neuron: ", j)
+                        for (let l = 0; l < weights[i][j].length; l++) {
+                            // console.log(`L : ${l} i:${i}`)
+                            // console.log(weights[i][j][l], "Hidden Layer: ", i, "Neuron: ", j, predictions[l])
+                            //    console.log(`values: ${values[l]} x weights: ${weights[i][j][l]}`)
+                            sum = values[l] * weights[i][j][l]
+                        }
+                        sum += biases[i][j]
+
+                        values[j] = weights[i][j].length - 1 == j ? sigmoid(sum) : reLU(sum)
+                        // console.log(weights[i][j], "Hidden Layer: ", i, "Neuron: ", j, "Length: ", weights[i][j].length)
+
+                    }
+                    predictions = values
+                }
+                return predictions
+            }
+            function backPropagation() {
+                for (let data of dataset) {
+                   const predictions = predict(weights, biases, data)
+                    // console.log(predictions);
+                    for( let i = 0; i < predictions.length; i++){
+                        const error = predictions[i] - data.actual[i];
+                        const loss = error ** 2
+                        console.log(error, loss, "ERROR LOSS")
+                    }
+                }
+            }
+            backPropagation()
+            // TODO: 1. Instantiate or call your NN prediction here.
+            // TODO: 2. Get predicted angle and force from your NN.
+            // TODO: 3. Pass values to moveBallToTarget(predictedAngle, predictedForce).
+            // TODO: 4. Compute loss and trigger backpropagation.
+
+
+            console.log("stepAITrain triggered. Add your NN logic here!");
+        }
+
+        function toggleTraining() {
+            isTraining = !isTraining;
+            let btn = document.getElementById('trainToggleBtn');
+            if (isTraining) {
+                btn.classList.replace('bg-emerald-600', 'bg-amber-600');
+                btn.classList.replace('hover:bg-emerald-700', 'hover:bg-amber-700');
+                btn.innerHTML = `<i class="fa-solid fa-pause"></i> Pause Training`;
+                if (!isMoving) stepAITrain();
+            } else {
+                btn.classList.replace('bg-amber-600', 'bg-emerald-600');
+                btn.classList.replace('hover:bg-amber-700', 'hover:bg-emerald-700');
+                btn.innerHTML = `<i class="fa-solid fa-play"></i> Resume Auto Train`;
+            }
+        }
+
+        function resetNeuralWeights() {
+            epoch = 0;
+            successCount = 0;
+            totalAttempts = 0;
+            lossHistory = [];
+            previousTrajectories = [];
+            document.getElementById('epochBadge').innerText = '0';
+            document.getElementById('successBadge').innerText = '0%';
+            document.getElementById('errorBadge').innerText = '0 px';
+            document.getElementById('lossValueText').innerText = 'Loss: Reset';
+            logTelemetry(`<span class="text-rose-400">Neural Network state reset.</span>`);
+            drawNNTopology();
+        }
+    </script>
+</body>
+
+</html>
